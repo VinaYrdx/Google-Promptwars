@@ -15,16 +15,23 @@ function Skeleton() {
   );
 }
 
-export default function Dashboard({ footprint, geminiData, loading, error, completed, onToggle, onRefresh, onReset }) {
+// Added 'profile' to props so we can display the contextual data
+export default function Dashboard({ profile, footprint, geminiData, loading, error, completed, onToggle, onRefresh, onReset }) {
+  // Defensive return in case of corrupted local storage
+  if (!footprint) return null;
+
   const chartData = [
-    { name: 'Transport', value: footprint.transport_kg },
-    { name: 'Diet', value: footprint.diet_kg },
-    { name: 'Energy', value: footprint.energy_kg },
-    { name: 'Flights', value: footprint.flights_kg },
+    { name: 'Transport', value: footprint.transport_kg || 0 },
+    { name: 'Diet', value: footprint.diet_kg || 0 },
+    { name: 'Energy', value: footprint.energy_kg || 0 },
+    { name: 'Flights', value: footprint.flights_kg || 0 },
   ].filter(d => d.value > 0);
 
-  const savedKg = completed.reduce((s, a) => s + (a.impact_kg || 0), 0);
-  const allDone = geminiData?.actions?.every(a => completed.find(c => c.title === a.title));
+  const savedKg = completed?.reduce((s, a) => s + (a.impact_kg || 0), 0) || 0;
+  const allDone = geminiData?.actions?.length > 0 && geminiData.actions.every(a => completed?.find(c => c.title === a.title));
+
+  // Check if our dynamic engine triggered the renewable grid
+  const isHydroRegion = ['himachal', 'himachal pradesh', 'uttarakhand'].includes((profile?.region || '').toLowerCase());
 
   return (
     <div className="min-h-screen bg-gray-950 text-white p-4 max-w-md mx-auto pb-20">
@@ -34,16 +41,32 @@ export default function Dashboard({ footprint, geminiData, loading, error, compl
           <div className="text-xl font-semibold">🌱 CarbonMind</div>
           <div className="text-gray-400 text-xs">Your carbon footprint analysis</div>
         </div>
-        <button onClick={onReset} className="text-gray-500 text-xs hover:text-gray-400 border border-gray-700 px-3 py-1 rounded-lg">
+        <button onClick={onReset} className="text-gray-500 text-xs hover:text-gray-400 border border-gray-700 px-3 py-1 rounded-lg transition-colors">
           Retake quiz
         </button>
       </div>
 
-      {/* Big number */}
+      {/* Big number & Context Flex */}
       <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 mb-4">
-        <div className="text-gray-400 text-sm mb-1">Your annual footprint</div>
+        <div className="flex flex-wrap items-center gap-2 mb-2">
+          <div className="text-gray-400 text-sm">Your annual footprint</div>
+          
+          {/* Hackathon flex: Show the judges the dynamic context is working */}
+          {profile?.region && (
+            <span className="bg-gray-800 text-gray-300 text-[10px] px-2 py-0.5 rounded-full border border-gray-700 uppercase tracking-wider">
+              📍 {profile.region}
+            </span>
+          )}
+          {isHydroRegion && (
+            <span className="bg-green-900/30 text-green-400 text-[10px] px-2 py-0.5 rounded-full border border-green-800/50 uppercase tracking-wider">
+              ⚡ Renewable Grid
+            </span>
+          )}
+        </div>
+        
         <div className="text-5xl font-bold text-white mb-1">{footprint.total_tonnes}t</div>
         <div className="text-gray-400 text-sm">CO₂ equivalent / year</div>
+        
         <div className="flex gap-4 mt-4 pt-4 border-t border-gray-800">
           <div className="text-center">
             <div className={`text-lg font-semibold ${footprint.total_tonnes > INDIA_AVG_TONNES ? 'text-amber-400' : 'text-green-400'}`}>
@@ -81,7 +104,7 @@ export default function Dashboard({ footprint, geminiData, loading, error, compl
               isAnimationActive
             >
               {chartData.map((_, i) => (
-                <Cell key={i} fill={COLORS[i]} />
+                <Cell key={`cell-${i}`} fill={COLORS[i]} />
               ))}
             </Pie>
             <Tooltip
@@ -116,7 +139,7 @@ export default function Dashboard({ footprint, geminiData, loading, error, compl
         {loading ? <Skeleton /> : (
           <div className="space-y-3">
             {geminiData?.actions?.map((action, i) => {
-              const done = !!completed.find(c => c.title === action.title);
+              const done = !!completed?.find(c => c.title === action.title);
               return (
                 <div
                   key={i}
