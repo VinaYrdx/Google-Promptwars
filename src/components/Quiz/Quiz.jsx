@@ -1,7 +1,23 @@
 import { useState } from 'react';
-import { INDIA_DEFAULTS } from '../../utils/emissions';
+
+const INDIA_DEFAULTS = {
+  transport: 'auto',
+  weeklyKm: 50,
+  diet: 'mixed',
+  energySource: 'coal',
+  monthlyKwh: 150,
+  shortFlights: 2,
+  longFlights: 0,
+  region: 'general',
+};
 
 const QUESTIONS = [
+  {
+    id: 'region',
+    label: 'Which state/region do you live in?',
+    type: 'text',
+    placeholder: 'e.g., Delhi, Himachal Pradesh, Uttarakhand',
+  },
   {
     id: 'transport',
     label: 'Primary mode of transport?',
@@ -62,6 +78,7 @@ const QUESTIONS = [
 export default function Quiz({ onSubmit }) {
   const [current, setCurrent] = useState(0);
   const [answers, setAnswers] = useState({
+    region: '',
     transport: '',
     weeklyKm: '',
     diet: '',
@@ -73,7 +90,8 @@ export default function Quiz({ onSubmit }) {
   const [err, setErr] = useState('');
 
   const q = QUESTIONS[current];
-  const progress = ((current) / QUESTIONS.length) * 100;
+  // FIXED: UX progress bar starts at >0% for question 1
+  const progress = ((current + 1) / QUESTIONS.length) * 100;
 
   function setValue(val) {
     setAnswers(p => ({ ...p, [q.id]: val }));
@@ -82,14 +100,15 @@ export default function Quiz({ onSubmit }) {
 
   function next() {
     const val = answers[q.id];
-    if (val === '' || val === null || val === undefined) {
+    // Allow region to be optional so it doesn't block users who skip it
+    if (q.id !== 'region' && (val === '' || val === null || val === undefined)) {
       setErr('Please answer this question to continue.');
       return;
     }
+    
     if (current < QUESTIONS.length - 1) {
       setCurrent(c => c + 1);
     } else {
-      // Use India defaults for any blank numeric fields
       const final = { ...INDIA_DEFAULTS, ...answers };
       Object.keys(final).forEach(k => {
         if (final[k] === '' || final[k] === null) final[k] = INDIA_DEFAULTS[k];
@@ -130,6 +149,16 @@ export default function Quiz({ onSubmit }) {
         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 mb-4">
           <div className="text-white font-medium text-lg mb-5">{q.label}</div>
 
+          {q.type === 'text' && (
+            <input
+              type="text"
+              value={answers[q.id]}
+              onChange={e => setValue(e.target.value)}
+              placeholder={q.placeholder}
+              className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white text-lg focus:outline-none focus:border-green-500 transition-colors"
+            />
+          )}
+
           {q.type === 'select' && (
             <div className="grid grid-cols-2 gap-2">
               {q.options.map(opt => (
@@ -156,7 +185,7 @@ export default function Quiz({ onSubmit }) {
                 value={answers[q.id]}
                 onChange={e => setValue(e.target.value)}
                 placeholder={q.placeholder}
-                className="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white text-lg focus:outline-none focus:border-green-500"
+                className="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white text-lg focus:outline-none focus:border-green-500 transition-colors"
               />
               {q.unit && <span className="text-gray-400 text-sm">{q.unit}</span>}
             </div>

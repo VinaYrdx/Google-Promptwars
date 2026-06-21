@@ -1,159 +1,44 @@
-# 🌱 CarbonMind — AI Carbon Coach
+🌱 CarbonMind
 
-> **Google PromptWars Virtual · Challenge 3**  
-> Design a solution that helps individuals understand, track, and reduce their carbon footprint through simple actions and personalized insights.
+Your personal, hyper-local carbon coach. CarbonMind isn't just a calculator; it's a context-aware AI assistant that uses dynamic environmental data and personalized tracking to help you reduce your footprint.
 
-**Live Demo:** [your-vercel-url.vercel.app]  
-**Built by:** Vinay Kumar (VinaYrdx) · IIT Roorkee
+🚀 High-Impact Features & Architecture
 
----
+1. Dynamic Regional Math Engine
 
-## What It Does
+CarbonMind features a context-aware math engine that dynamically adjusts emission factors based on the user's location.
 
-CarbonMind is an AI-powered carbon footprint coach that:
+Smart Grid Routing: If a user is located in heavy hydroelectric regions (e.g., Himachal Pradesh, Uttarakhand), the energy emission factor automatically drops from the national coal average (0.82 kg/kWh) to a renewable baseline (0.05 kg/kWh).
 
-1. **Onboards** users via a 6-question quiz (transport, diet, energy, flights)
-2. **Calculates** their annual CO₂ footprint using IPCC 2022 emission factors
-3. **Personalizes** a 3-action plan using Gemini AI — with specific kg savings and why it matters *for this user*
-4. **Tracks** progress as users complete actions, with CO₂ saved counter
-5. **Refreshes** recommendations via multi-turn Gemini calls when all actions are completed
+Scientific Sourcing: All baseline math strictly adheres to verified sources:
 
-India-first: defaults to coal grid (0.82 kg/kWh), includes auto-rickshaw as transport option, compares against India avg (1.9t) and global avg (4.7t).
+Transport: IPCC AR6 WG3 Table 10.2 (2022)
 
----
+Diet: Poore & Nemecek, Science (2018)
 
-## Tech Stack
+Energy: CEA India Emission Factor (2023)
 
-| Tool | Why |
-|------|-----|
-| React + Vite | Fast build, component isolation, Vercel-native |
-| Gemini 2.0 Flash | Google competition — strategic + free tier (15 req/min) |
-| Recharts | Lightweight pie chart, React-native, animated |
-| Tailwind CSS | Utility-first, zero CSS bloat in production |
-| localStorage | Zero backend — persists user progress across sessions |
-| Vercel | One-command deploy, auto HTTPS, env var support |
+Flights: ICAO Carbon Emissions Calculator
 
----
+2. Advanced AI Integration (PromptWars Strategy)
 
-## Prompt Engineering
+We engineered a robust pipeline using the gemini-2.0-flash-exp model, optimized for strict JSON output and contextual accuracy.
 
-> This section documents the exact prompts used, the design decisions behind them, and the iteration process. This is the core of the PromptWars submission.
+Strict Persona: The system prompt forces the AI to act as a behavioral coach that speaks plainly and focuses purely on high-impact, actionable insights.
 
-### Architecture: All prompts in `src/services/gemini.js`
+Native JSON Schema: Instead of relying on brittle regex parsing, we enforce native JSON structures via the Gemini API configuration, ensuring the app never breaks from malformed markdown.
 
-Every prompt call is isolated in one file. Evaluators can audit all prompt engineering in a single location.
+Multi-turn Memory: Weekly refreshes pass completed actions back to the AI as context, preventing repetitive advice and proving multi-turn reasoning and memory simulation.
 
-### System Prompt (applied to all calls)
+🛠️ Local Setup
 
-```
-You are CarbonMind, an environmental scientist and behavioral coach.
-Rules:
-- Speak plainly to non-experts. Never lecture.
-- Always lead with the single highest-impact action for THIS user's specific data.
-- Use Indian context: coal-heavy grid, auto-rickshaw, metro, monsoon season.
-- Cite specific numbers (kg CO₂ saved/year) for every action.
-- Never give generic advice. Every line must be specific to the user's profile.
-```
+Clone the repository.
 
-**Why this works:** Role assignment with explicit rules changes Gemini's output specificity dramatically. Without this, Gemini returns generic "drive less, eat less meat" advice. With it, it returns "Your coal-grid home uses 1800kg/yr — switching to LED bulbs + inverter AC saves 340kg specifically."
+Install dependencies: npm install
 
-### Prompt 1: Footprint Analysis + Action Plan
+Create a .env file in the root directory and add your API key:
 
-**Key techniques used:**
+VITE_GEMINI_KEY=your_gemini_api_key_here
 
-1. **Full profile injection as JSON** — Gemini receives the complete user profile (transport mode, weekly km, diet, energy source, flights). This enables personalized reasoning like "since you drive 40km/week on India's coal grid..."
 
-2. **Chain-of-thought instruction** — "Internally rank ALL possible interventions by CO₂ impact for THIS specific profile before surfacing the top 3." This forces Gemini to reason before outputting, improving accuracy of impact numbers.
-
-3. **One-shot example** — A complete example of desired JSON output is embedded in the prompt. This improved parse success rate from ~70% to ~99% in testing.
-
-4. **Structured JSON output enforcement** — "Respond ONLY as valid JSON. No markdown, no preamble." Plus a retry prompt on parse failure.
-
-5. **Temperature: 0.3** — Low temperature for factual consistency in CO₂ numbers. We don't want creative emission figures.
-
-```javascript
-// Prompt structure (see src/services/gemini.js for full code)
-`User profile (JSON):
-${JSON.stringify({ ...profile, footprint })}
-
-Task: Analyze this carbon footprint and generate a personalized action plan.
-
-Instructions:
-1. Internally rank ALL possible interventions by CO₂ impact for THIS specific profile.
-2. Surface only the top 3 actions.
-3. Each action must reference specific numbers from the user's profile.
-4. Respond ONLY as valid JSON. No markdown, no preamble.
-
-Example output format:
-{ "summary": "...", "actions": [{...}], "insight": "..." }
-
-Now generate for this user's actual profile:`
-```
-
-### Prompt 2: Weekly Action Refresh (Multi-turn chaining)
-
-When a user completes all 3 actions, a new Gemini call passes the completed actions as context:
-
-```javascript
-`User has completed: ${JSON.stringify(completedActions)}
-CO₂ already saved: ${savedKg}kg
-
-Generate 3 NEW actions that:
-1. Build on habits from completed actions
-2. Never repeat any completed action  
-3. Are the next highest-impact interventions for this specific profile`
-```
-
-**Why this matters:** This demonstrates prompt chaining and simulated memory — the model receives prior context and builds on it. A key PromptWars evaluation criterion.
-
-### Prompt Iteration Log
-
-| Iteration | Problem | Fix |
-|-----------|---------|-----|
-| v1 | Gemini returned markdown-wrapped JSON, breaking parse | Added: strip ```json fences before parsing |
-| v2 | Actions were generic ("eat less meat") not personalized | Added: full user profile JSON injection |
-| v3 | JSON structure inconsistent (sometimes array, sometimes object) | Added: one-shot example in prompt body |
-| v4 | impact_kg numbers were unrealistic (e.g. 50000kg for diet) | Added: chain-of-thought + lowered temperature to 0.3 |
-| v5 | App crashed on API failure | Added: fallback action generator from emissions.js |
-
----
-
-## Emission Factors
-
-All values from peer-reviewed sources:
-
-| Category | Source |
-|----------|--------|
-| Transport kg/km | IPCC AR6 WG3 Table 10.2, 2022 |
-| Diet kg/year | Poore & Nemecek, Science 2018 |
-| Energy kg/kWh | CEA India Emission Factor Report 2023 |
-| Aviation kg/flight | ICAO Calculator + RFI multiplier 1.9 |
-
----
-
-## Setup (Local)
-
-```bash
-git clone https://github.com/VinaYrdx/carbonmind
-cd carbonmind
-npm install
-cp .env.example .env
-# Add your Gemini API key to .env
-npm run dev
-```
-
-Get a free Gemini API key at: https://aistudio.google.com
-
----
-
-## Project Structure
-
-```
-src/
-├── services/gemini.js     # ALL prompt engineering (one place)
-├── utils/emissions.js     # Carbon formulas + IPCC source comments  
-├── hooks/useCarbon.js     # State + API orchestration (custom hook)
-└── components/
-    ├── Quiz/Quiz.jsx       # 6-question onboarding wizard
-    └── Dashboard/Dashboard.jsx  # Footprint card, chart, action plan, tracker
-```
+Start the development server: npm run dev

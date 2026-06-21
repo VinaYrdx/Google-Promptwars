@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { calculateFootprint, INDIA_DEFAULTS } from '../utils/emissions';
 import { getActionPlan, getWeeklyRefresh } from '../services/gemini';
 
@@ -9,6 +9,22 @@ function load() {
 }
 function save(data) {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch {}
+}
+
+// FIXED: Moved outside the hook entirely to prevent stale closures and unnecessary re-evaluations
+function getFallback(fp, userProfile) {
+  const isHydro = ['himachal', 'himachal pradesh', 'uttarakhand'].includes((userProfile.region || '').toLowerCase());
+  const gridContext = isHydro ? "your local renewable grid" : "India's coal grid";
+
+  return {
+    summary: 'Here are your top actions based on your footprint data.',
+    actions: [
+      { title: 'Reduce meat consumption by 3 days/week', impact_kg: 600, difficulty: 'medium', timeframe: '1 month', why_this_user: `Your diet contributes ${fp.diet_kg}kg/year — cutting 3 days saves ~600kg.` },
+      { title: 'Switch to metro/bus for daily commute', impact_kg: Math.round(fp.transport_kg * 0.6), difficulty: 'easy', timeframe: 'immediate', why_this_user: `Your transport emits ${fp.transport_kg}kg/year. Public transit cuts this by 60%.` },
+      { title: 'Optimize AC usage', impact_kg: isHydro ? 20 : 200, difficulty: 'easy', timeframe: 'immediate', why_this_user: `On ${gridContext}, 2hrs less AC/day saves ~${isHydro ? 20 : 200}kg/year.` },
+    ],
+    insight: 'Small consistent changes compound. Start with the easiest one today.',
+  };
 }
 
 export function useCarbon() {
@@ -22,19 +38,6 @@ export function useCarbon() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // Fallback actions if Gemini fails — computed from profile
-  function getFallback(fp) {
-    return {
-      summary: 'Here are your top actions based on your footprint data.',
-      actions: [
-        { title: 'Reduce meat consumption by 3 days/week', impact_kg: 600, difficulty: 'medium', timeframe: '1 month', why_this_user: `Your diet contributes ${fp.diet_kg}kg/year — cutting 3 days saves ~600kg.` },
-        { title: 'Switch to metro/bus for daily commute', impact_kg: Math.round(fp.transport_kg * 0.6), difficulty: 'easy', timeframe: 'immediate', why_this_user: `Your transport emits ${fp.transport_kg}kg/year. Public transit cuts this by 60%.` },
-        { title: 'Reduce AC usage by 2 hours/day', impact_kg: 200, difficulty: 'easy', timeframe: 'immediate', why_this_user: `On India's coal grid, 2hrs less AC/day saves ~200kg/year.` },
-      ],
-      insight: 'Small consistent changes compound. Start with the easiest one today.',
-    };
-  }
-
   const submitQuiz = useCallback(async (profileData) => {
     const fp = calculateFootprint(profileData);
     setProfile(profileData);
@@ -45,11 +48,11 @@ export function useCarbon() {
 
     try {
       const data = await getActionPlan(profileData, fp);
-      const result = data || getFallback(fp);
+      const result = data || getFallback(fp, profileData);
       setGeminiData(result);
       save({ profile: profileData, footprint: fp, geminiData: result, completed });
     } catch {
-      const fallback = getFallback(fp);
+      const fallback = getFallback(fp, profileData);
       setGeminiData(fallback);
       setError('AI coach offline — showing calculated recommendations.');
       save({ profile: profileData, footprint: fp, geminiData: fallback, completed });

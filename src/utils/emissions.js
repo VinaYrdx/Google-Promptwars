@@ -21,7 +21,7 @@ const DIET_KG_PER_YEAR = {
 const ENERGY_KG_PER_KWH = {
   coal: 0.82,
   mixed: 0.45,
-  renewable: 0.05,
+  renewable: 0.05, // Heavy hydro regions (Himachal Pradesh, Uttarakhand)
 };
 
 // Source: ICAO Carbon Emissions Calculator + RFI multiplier 1.9
@@ -30,7 +30,6 @@ const FLIGHT_KG = {
   long: 1500,   // >3hr, per flight × radiative forcing index
 };
 
-// India averages for defaults
 export const INDIA_DEFAULTS = {
   transport: 'auto',
   weeklyKm: 50,
@@ -39,23 +38,34 @@ export const INDIA_DEFAULTS = {
   monthlyKwh: 150,
   shortFlights: 2,
   longFlights: 0,
+  region: 'general', // Added for dynamic context
 };
 
 export const INDIA_AVG_TONNES = 1.9;
 export const GLOBAL_AVG_TONNES = 4.7;
 
-export function calculateFootprint(profile) {
-  const transport = (TRANSPORT_KG_PER_KM[profile.transport] || 0.21)
-    * (profile.weeklyKm || 0) * 52;
+export function calculateFootprint(userInput) {
+  // 1. DEFENSIVE SHIELD: Ensure we never crash on null/undefined
+  // Merge user input with defaults so every variable is guaranteed to exist
+  const profile = { ...INDIA_DEFAULTS, ...(userInput || {}) };
 
-  const diet = DIET_KG_PER_YEAR[profile.diet] || 2500;
+  // 2. DYNAMIC CONTEXT: Smart grid routing based on region
+  const hydroStates = ['himachal', 'himachal pradesh', 'uttarakhand'];
+  if (profile.region && hydroStates.includes(profile.region.toLowerCase())) {
+      profile.energySource = 'renewable';
+  }
 
-  const energy = (ENERGY_KG_PER_KWH[profile.energySource] || 0.82)
-    * (profile.monthlyKwh || 150) * 12;
+  // 3. SAFE MATH: Parse everything to Floats to prevent NaN errors from string inputs
+  const weeklyKm = parseFloat(profile.weeklyKm) || 0;
+  const monthlyKwh = parseFloat(profile.monthlyKwh) || 0;
+  const shortFlights = parseFloat(profile.shortFlights) || 0;
+  const longFlights = parseFloat(profile.longFlights) || 0;
 
-  const flights =
-    (profile.shortFlights || 0) * FLIGHT_KG.short +
-    (profile.longFlights || 0) * FLIGHT_KG.long;
+  // 4. EXECUTE CALCULATIONS
+  const transport = (TRANSPORT_KG_PER_KM[profile.transport] || TRANSPORT_KG_PER_KM['car']) * weeklyKm * 52;
+  const diet = DIET_KG_PER_YEAR[profile.diet] || DIET_KG_PER_YEAR['mixed'];
+  const energy = (ENERGY_KG_PER_KWH[profile.energySource] || ENERGY_KG_PER_KWH['coal']) * monthlyKwh * 12;
+  const flights = (shortFlights * FLIGHT_KG.short) + (longFlights * FLIGHT_KG.long);
 
   const total = transport + diet + energy + flights;
 
